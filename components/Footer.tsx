@@ -46,6 +46,8 @@ export function Footer() {
       title: t.footer.author,
       links: [
         { href: site.github.url, label: 'GitHub', external: true },
+        { href: `${site.github.url}/releases`, label: t.footer.releases, external: true },
+        { href: `${site.github.url}/issues`, label: t.footer.issues, external: true },
         { href: 'https://modelcontextprotocol.io', label: t.footer.aboutMcp, external: true },
       ],
     },
@@ -53,14 +55,30 @@ export function Footer() {
 
   return (
     <footer
-      className="mt-32"
+      className="mt-32 relative"
       style={{
         borderTop: '1px solid var(--border)',
         background: 'var(--bg)',
       }}
     >
+      {/* Decorative gradient strip */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: -1,
+          left: '10%',
+          right: '10%',
+          height: 1,
+          background:
+            'linear-gradient(90deg, transparent, var(--accent) 50%, transparent)',
+          opacity: 0.4,
+        }}
+      />
+
       <div className="mx-auto max-w-7xl px-4 sm:px-6 pt-16 pb-10">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-10">
+          {/* Brand column */}
           <div className="col-span-2 md:col-span-2">
             <Logo />
             <p
@@ -69,22 +87,37 @@ export function Footer() {
             >
               {t.footer.description}
             </p>
-            <a
-              href={site.github.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-flex items-center gap-2 mt-5 text-[12.5px] mono"
-              style={{ color: 'var(--fg-muted)' }}
+
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <a
+                href={site.github.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-2 h-8 px-3 rounded-md text-[12px] mono transition-colors"
+                style={{
+                  color: 'var(--fg)',
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <GithubIcon size={13} />
+                <span>{site.github.repo}</span>
+              </a>
+            </div>
+
+            <div
+              className="mt-5 inline-flex items-center gap-2 text-[11.5px]"
+              style={{ color: 'var(--fg-subtle)' }}
             >
-              <GithubIcon size={13} />
-              <span>{site.github.repo}</span>
-            </a>
+              <span className="status-dot" data-status="online" aria-hidden />
+              <span>{t.footer.statusOperational}</span>
+            </div>
           </div>
 
           {columns.map((col) => (
             <div key={col.title}>
               <h3
-                className="text-[11px] mono uppercase tracking-[0.08em] mb-3"
+                className="text-[11px] mono uppercase tracking-[0.08em] mb-3.5"
                 style={{ color: 'var(--fg-subtle)' }}
               >
                 {col.title}
@@ -97,15 +130,22 @@ export function Footer() {
                         href={l.href}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="text-[13px] transition-colors hover:text-[var(--fg)]"
+                        className="text-[13px] inline-flex items-center gap-1.5 transition-colors footer-link"
                         style={{ color: 'var(--fg-muted)' }}
                       >
                         {l.label}
+                        <span
+                          className="opacity-0 footer-link-arrow"
+                          aria-hidden
+                          style={{ transition: 'opacity 150ms' }}
+                        >
+                          ↗
+                        </span>
                       </a>
                     ) : (
                       <Link
                         href={l.href}
-                        className="text-[13px] transition-colors hover:text-[var(--fg)]"
+                        className="text-[13px] transition-colors footer-link"
                         style={{ color: 'var(--fg-muted)' }}
                       >
                         {l.label}
@@ -119,15 +159,38 @@ export function Footer() {
         </div>
 
         <div
-          className="mt-14 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px]"
+          className="mt-14 pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-[12px]"
           style={{
             borderTop: '1px solid var(--border)',
             color: 'var(--fg-subtle)',
           }}
         >
-          <span>
-            © {site.year} {site.author.name} · {site.license} {t.footer.license}
-          </span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+            <span>
+              © {site.year}{' '}
+              <a
+                href={site.github.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="transition-colors hover:text-[var(--fg)]"
+                style={{ color: 'var(--fg-subtle)' }}
+              >
+                {site.author.name}
+              </a>
+            </span>
+            <span className="hidden sm:inline" style={{ color: 'var(--border-strong)' }}>·</span>
+            <span>
+              <Link
+                href={`${site.github.url}/blob/main/LICENSE`}
+                className="transition-colors hover:text-[var(--fg)]"
+                style={{ color: 'var(--fg-subtle)' }}
+              >
+                {site.license} {t.footer.license}
+              </Link>
+            </span>
+            <span className="hidden sm:inline" style={{ color: 'var(--border-strong)' }}>·</span>
+            <span className="italic">{t.footer.madeIn}</span>
+          </div>
           <span className="mono">{t.footer.builtWith}</span>
         </div>
       </div>
