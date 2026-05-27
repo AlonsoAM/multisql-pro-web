@@ -1,0 +1,153 @@
+El dashboard es una app Express que expone una pequeña API REST. La UI es el consumidor principal, pero los endpoints también son útiles para scripting — aprovisionar conexiones desde CI, probar en lote cada conexión en un horario, etc.
+
+> **Importante:** el dashboard se vincula solo a `localhost`. No tiene autenticación. No lo expongas a una red sin poner un proxy de autenticación delante.
+
+## URL base
+
+```text
+http://localhost:4567/api
+```
+
+El puerto es configurable vía `settings.dashboardPort` en `config.json`.
+
+## Endpoints
+
+| Método   | Ruta                              | Descripción                                                          |
+| -------- | --------------------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/api/config`                     | Configuración completa con contraseñas enmascaradas.                 |
+| `GET`    | `/api/config/raw`                 | Configuración tal como está en disco. Interno — no exponer.          |
+| `PUT`    | `/api/settings`                   | Actualizar `settings` globales.                                      |
+| `POST`   | `/api/connections`                | Crear una conexión (`{ id, definition }`).                           |
+| `PUT`    | `/api/connections/:id`            | Actualizar una conexión. `password === "********"` mantiene la anterior. |
+| `DELETE` | `/api/connections/:id`            | Eliminar una conexión y cerrar su pool.                              |
+| `POST`   | `/api/connections/:id/test`       | Probar una conexión almacenada. Retorna versión del motor + base de datos. |
+| `POST`   | `/api/test`                       | Probar una definición arbitraria (sin guardarla).                    |
+| `GET`    | `/api/windows-identity`           | Retorna `{ user, domain }` del proceso del dashboard. Usado por Auto. |
+| `POST`   | `/api/list-databases`             | Conectar a `master` y retornar `sys.databases` (sin DBs del sistema). |
+| `POST`   | `/api/connections/:id/details`    | Retorna metadatos completos de conexión (servidor, puerto, db, usuario, tipo). |
+
+## Solicitudes de ejemplo
+
+### Obtener configuración (enmascarada)
+
+```bash
+curl http://localhost:4567/api/config
+```
+
+```json
+{
+  "connections": {
+    "cloud": {
+      "name": "BD Cloud",
+      "type": "dev",
+      "config": {
+        "authType": "sql",
+        "server": "192.168.0.10",
+        "port": 1433,
+        "database": "MI_BD",
+        "user": "miUsuario",
+        "password": "********",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    }
+  },
+  "settings": { "queryTimeout": 60000, "maxRows": 10000, "dashboardPort": 4567 }
+}
+```
+
+### Crear una conexión
+
+```bash
+curl -X POST http://localhost:4567/api/connections \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "qa-mx",
+    "definition": {
+      "name": "QA México",
+      "type": "qa",
+      "config": {
+        "authType": "sql",
+        "server": "10.20.0.5",
+        "port": 1433,
+        "database": "QA_MX",
+        "user": "qa_user",
+        "password": "secret",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    }
+  }'
+```
+
+### Probar una conexión almacenada
+
+```bash
+curl -X POST http://localhost:4567/api/connections/prod/test
+```
+
+```json
+{
+  "ok": true,
+  "version": "Microsoft SQL Server 2019 (RTM-CU22)",
+  "database": "MI_BD_PROD",
+  "durationMs": 142
+}
+```
+
+### Listar bases de datos en un servidor
+
+```bash
+curl -X POST http://localhost:4567/api/list-databases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "server": "10.20.0.5",
+    "port": 1433,
+    "user": "sa",
+    "password": "secret",
+    "authType": "sql"
+  }'
+```
+
+```json
+[
+  { "name": "AdventureWorks2019" },
+  { "name": "Reporting" },
+  { "name": "MI_BD_PROD" }
+]
+```
+
+### Detectar identidad Windows
+
+```bash
+curl http://localhost:4567/api/windows-identity
+```
+
+```json
+{ "user": "AANCHANTE", "domain": "AGRICOLAANDREA" }
+```
+
+### Actualizar configuración global
+
+```bash
+curl -X PUT http://localhost:4567/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{ "queryTimeout": 30000, "maxRows": 5000 }'
+```
+
+## Errores
+
+Todos los endpoints retornan JSON. En fallo:
+
+```json
+{
+  "ok": false,
+  "error": "CONNECTION_NOT_FOUND",
+  "message": "No hay conexión con id 'qa-mx'"
+}
+```
+
+Códigos de estado:
+
+- `400` — payload inválido (JSON mal formado, campo requerido faltante).
+- `404` — conexión no encontrada.
+- `409` — id de conexión duplicado en POST.
+- `500` — error inesperado del servidor. Revisa los logs del proceso del dashboard.

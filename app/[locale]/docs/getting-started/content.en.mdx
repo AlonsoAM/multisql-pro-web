@@ -1,0 +1,88 @@
+This guide takes you from zero to a working MultiSQL Pro setup against a SQL Server, registered with Claude Code, in about five minutes. Here we'll only configure a `dev` connection — production and read-only modes are covered in the [permission model](/en/docs/permissions).
+
+## 1. Prerequisites
+
+- **Node.js 18+** installed. Verify:
+
+```bash
+node --version
+```
+
+- A **SQL Server 2016 or higher** reachable with credentials.
+- An MCP-compatible AI client. We'll use **Claude Code** in this guide, but any other client works the same way.
+
+## 2. Clone the repository
+
+```bash
+git clone https://github.com/AlonsoAM/multisql-pro.git
+cd multisql-pro
+npm install
+```
+
+The first time you run any MultiSQL Pro command, a `config.json` is auto-created from `config.example.json`.
+
+## 3. Configure your first connection
+
+Open the dashboard from the project root:
+
+```bash
+npm run config
+```
+
+This launches a local web UI at `http://localhost:4567` and opens your browser. Click **+ New connection** and fill in:
+
+- **ID** — a free-form identifier. `dev` is a good first one.
+- **Name** — a human label, e.g. *Local dev*.
+- **Type** — pick `dev`. Permissions are unlimited on dev.
+- **Authentication** — `SQL Server` for username/password, or `Windows (NTLM)` for integrated auth. Press the **Auto** button next to the domain field to detect your current Windows identity.
+- **Server / Port / Database** — host, port (1433 by default) and database name. If you don't remember the database, fill in server + user + password and press **Load** to autocomplete the list of databases.
+
+Click **Test** to verify the connection. You should see a green status dot with the latency in milliseconds. Save the connection.
+
+## 4. Register the MCP in Claude Code
+
+Pick one of two methods:
+
+### Option A — via the Claude Code CLI
+
+```bash
+claude mcp add multisql-pro -- node "C:/absolute/path/to/multisql-pro/src/server.js"
+```
+
+### Option B — editing the config file
+
+Add an entry to your Claude Code MCP config:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/absolute/path/to/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+Restart Claude Code (or run `claude mcp list` to confirm the registration).
+
+## 5. Ask your first question
+
+In any Claude Code session, ask:
+
+> *List available connections in multisql-pro*
+
+You should see a `list_connections` tool call and a response that includes your `dev` connection. Now try:
+
+> *List tables in the `dbo` schema of dev*
+
+That triggers `list_tables` against your database. Done.
+
+## Where to go from here
+
+- Add more connections — `qa`, `prod`, `cloud`, whatever you need.
+- Lock down production by labeling it `prod` or `readonly`. See the [permission model](/en/docs/permissions).
+- Read about every tool exposed to the agent in the [MCP tools reference](/en/docs/tools).
+- If something didn't work, jump to [troubleshooting](/en/docs/troubleshooting).

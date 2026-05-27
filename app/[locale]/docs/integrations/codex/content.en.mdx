@@ -1,0 +1,62 @@
+Codex is OpenAI's terminal-based coding agent. It supports MCP servers natively, letting you query your SQL Server databases directly from the terminal.
+
+## Prerequisites
+
+- MultiSQL Pro installed and at least one connection configured.
+- Codex CLI installed. Verify with `codex --version`.
+
+## Option A — register via CLI
+
+```bash
+codex mcp add multisql-pro -- node "C:/absolute/path/to/multisql-pro/src/server.js"
+```
+
+Notes:
+
+- The path **must be absolute**.
+- Everything after `--` is what Codex will run to start the MCP.
+- On macOS / Linux, drop the drive letter: `node "/Users/you/code/multisql-pro/src/server.js"`.
+
+Verify:
+
+```bash
+codex mcp list
+# multisql-pro · stdio · node C:/.../multisql-pro/src/server.js
+```
+
+## Option B — edit the MCP config manually
+
+Add an entry under `mcpServers` in Codex's config:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/absolute/path/to/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+Save and restart Codex.
+
+## Verify the integration
+
+Open a Codex session and ask:
+
+> *List available connections in multisql-pro*
+
+Codex should call `list_connections` and return the configured connections.
+
+Try a real query:
+
+> *Show me the columns of the Customers table in cloud*
+
+## Notes
+
+- The same `config.json` feeds Codex and other MCP clients.
+- If Codex can't find `node`, use the absolute path to the executable.
+- Codex may require you to **explicitly enable** the MCP after registering it.

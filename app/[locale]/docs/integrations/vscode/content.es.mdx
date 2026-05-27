@@ -1,0 +1,68 @@
+Visual Studio Code soporta servidores MCP a través de extensiones como **GitHub Copilot Chat** y otros agentes de IA compatibles con el Model Context Protocol. Una vez registrado, MultiSQL Pro queda disponible desde el panel de chat de tu editor.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada.
+- VS Code con una extensión que soporte MCP (GitHub Copilot Chat reciente, Continue, u otra extensión MCP-compatible).
+
+## 1. Abrir la configuración MCP de VS Code
+
+Dependiendo de tu extensión:
+
+- **GitHub Copilot Chat**: abre `settings.json` y agrega la sección `mcp` (o usa el comando `MCP: Add Server` desde la paleta de comandos).
+- **Continue / otras extensiones**: cada extensión tiene su propio archivo de configuración MCP. Consulta su documentación para la ruta exacta.
+
+Ubicaciones comunes:
+
+- **Windows**: `%APPDATA%\Code\User\settings.json`
+- **macOS**: `~/Library/Application Support/Code/User/settings.json`
+- **Linux**: `~/.config/Code/User/settings.json`
+
+## 2. Agregar la entrada MCP
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "multisql-pro": {
+        "command": "node",
+        "args": [
+          "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+        ]
+      }
+    }
+  }
+}
+```
+
+Si tu extensión usa la convención `mcpServers` en lugar de `mcp.servers`, ajusta la clave de acuerdo. La forma del valor es la misma para cada cliente MCP.
+
+## 3. Recargar VS Code
+
+Ejecuta **Developer: Reload Window** desde la paleta de comandos (`Ctrl/Cmd + Shift + P`), o reinicia VS Code completamente. La extensión MCP cargará el servidor al inicio.
+
+## 4. Verificar
+
+Abre el panel de chat de tu extensión y pregunta:
+
+> *Usa multisql-pro para listar las conexiones configuradas.*
+
+Deberías ver una llamada a `list_connections` con tus conexiones del dashboard.
+
+## Notas
+
+- VS Code en sí no implementa MCP nativamente — la integración depende de la extensión. Mantén tu extensión actualizada.
+- El mismo `config.json` alimenta VS Code y otros clientes MCP — no hay configuración por cliente.
+- Si la extensión no encuentra `node`, dale la ruta absoluta al ejecutable: `"command": "C:/Program Files/nodejs/node.exe"`.
+- Algunas extensiones requieren que **habilites explícitamente** el MCP después de registrarlo. Busca el toggle correspondiente en la UI de la extensión.
+
+## Solución de problemas
+
+**El MCP no aparece en el chat.**
+Confirma que la extensión soporta MCP en tu versión. Algunas requieren feature flags o canal preview.
+
+**Errores al iniciar el MCP.**
+Revisa el panel de Output de VS Code, selecciona el canal de tu extensión MCP. El servidor escribe sus errores a stderr.
+
+**`execute_sql` falla en prod.**
+Es el parser bloqueando escrituras. Consulta el [modelo de permisos](/es/docs/permissions).

@@ -1,0 +1,153 @@
+The dashboard is an Express app that exposes a small REST API. The UI is the primary consumer, but the endpoints are also useful for scripting — provisioning connections from CI, batch-testing every connection on a schedule, etc.
+
+> **Important:** the dashboard binds to `localhost` only. It has no authentication. Don't expose it to a network without putting an auth proxy in front.
+
+## Base URL
+
+```text
+http://localhost:4567/api
+```
+
+The port is configurable via `settings.dashboardPort` in `config.json`.
+
+## Endpoints
+
+| Method   | Path                              | Description                                                          |
+| -------- | --------------------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/api/config`                     | Full config with masked passwords.                                   |
+| `GET`    | `/api/config/raw`                 | Config as it lives on disk. Internal — don't expose.                 |
+| `PUT`    | `/api/settings`                   | Update global `settings`.                                            |
+| `POST`   | `/api/connections`                | Create a connection (`{ id, definition }`).                          |
+| `PUT`    | `/api/connections/:id`            | Update a connection. `password === "********"` keeps the previous one. |
+| `DELETE` | `/api/connections/:id`            | Delete a connection and close its pool.                              |
+| `POST`   | `/api/connections/:id/test`       | Test a stored connection. Returns engine version + database.         |
+| `POST`   | `/api/test`                       | Test an arbitrary definition (without saving it).                    |
+| `GET`    | `/api/windows-identity`           | Returns `{ user, domain }` of the dashboard process. Used by Auto.   |
+| `POST`   | `/api/list-databases`             | Connect to `master` and return `sys.databases` (no system DBs).      |
+| `POST`   | `/api/connections/:id/details`    | Returns full connection metadata (server, port, db, user, type).     |
+
+## Example requests
+
+### Get config (masked)
+
+```bash
+curl http://localhost:4567/api/config
+```
+
+```json
+{
+  "connections": {
+    "cloud": {
+      "name": "Cloud DB",
+      "type": "dev",
+      "config": {
+        "authType": "sql",
+        "server": "192.168.0.10",
+        "port": 1433,
+        "database": "MY_DB",
+        "user": "myUser",
+        "password": "********",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    }
+  },
+  "settings": { "queryTimeout": 60000, "maxRows": 10000, "dashboardPort": 4567 }
+}
+```
+
+### Create a connection
+
+```bash
+curl -X POST http://localhost:4567/api/connections \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "qa-mx",
+    "definition": {
+      "name": "QA Mexico",
+      "type": "qa",
+      "config": {
+        "authType": "sql",
+        "server": "10.20.0.5",
+        "port": 1433,
+        "database": "QA_MX",
+        "user": "qa_user",
+        "password": "secret",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    }
+  }'
+```
+
+### Test a stored connection
+
+```bash
+curl -X POST http://localhost:4567/api/connections/prod/test
+```
+
+```json
+{
+  "ok": true,
+  "version": "Microsoft SQL Server 2019 (RTM-CU22)",
+  "database": "MY_PROD_DB",
+  "durationMs": 142
+}
+```
+
+### List databases on a server
+
+```bash
+curl -X POST http://localhost:4567/api/list-databases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "server": "10.20.0.5",
+    "port": 1433,
+    "user": "sa",
+    "password": "secret",
+    "authType": "sql"
+  }'
+```
+
+```json
+[
+  { "name": "AdventureWorks2019" },
+  { "name": "Reporting" },
+  { "name": "MY_PROD_DB" }
+]
+```
+
+### Detect Windows identity
+
+```bash
+curl http://localhost:4567/api/windows-identity
+```
+
+```json
+{ "user": "AANCHANTE", "domain": "AGRICOLAANDREA" }
+```
+
+### Update global settings
+
+```bash
+curl -X PUT http://localhost:4567/api/settings \
+  -H "Content-Type: application/json" \
+  -d '{ "queryTimeout": 30000, "maxRows": 5000 }'
+```
+
+## Errors
+
+All endpoints return JSON. On failure:
+
+```json
+{
+  "ok": false,
+  "error": "CONNECTION_NOT_FOUND",
+  "message": "No connection with id 'qa-mx'"
+}
+```
+
+Status codes:
+
+- `400` — invalid payload (malformed JSON, missing required field).
+- `404` — connection not found.
+- `409` — duplicate connection id on POST.
+- `500` — unexpected server error. Check the dashboard process logs.

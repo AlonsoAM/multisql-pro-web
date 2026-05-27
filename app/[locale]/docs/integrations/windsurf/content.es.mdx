@@ -1,0 +1,50 @@
+Windsurf es el editor AI de Codeium y soporta servidores MCP de forma nativa. La forma de registro es idéntica a Claude Code y Cursor.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada.
+- Windsurf instalado y con sesión iniciada.
+
+## 1. Abrir la configuración MCP de Windsurf
+
+En Windsurf, abre el panel Cascade y encuentra **MCP servers** en el menú de configuración. Windsurf te permite gestionar servidores MCP visualmente, o puedes editar la configuración JSON directamente.
+
+El archivo de configuración MCP vive en el directorio de configuración por usuario de Windsurf. Consulta la documentación de Windsurf para la ruta exacta en tu versión — Codeium la actualiza periódicamente.
+
+## 2. Agregar la entrada MCP
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+## 3. Reiniciar Windsurf
+
+Cierra Windsurf completamente y vuélvelo a abrir. El servidor MCP se carga al inicio.
+
+## 4. Verificar
+
+Pregúntale a Cascade:
+
+> *Usa multisql-pro para listar las conexiones configuradas.*
+
+Deberías ver a Cascade llamar a `list_connections` y mostrar el resultado.
+
+## Diferencias vs. Claude Code
+
+- Windsurf puede requerir que **habilites explícitamente** el servidor MCP después de registrarlo. Busca un toggle en la lista de servidores MCP.
+- La UI de Windsurf muestra las llamadas a herramientas de forma ligeramente diferente — aparecen en la línea de tiempo de Cascade en lugar de como mensajes independientes.
+- El servidor MCP en sí es idéntico. El mismo `config.json` y el mismo `src/server.js` alimentan cada integración.
+
+## Notas
+
+- Si Cascade reporta que el MCP falla al iniciar, la causa más común es una ruta incorrecta. Confirma que `node` y la ruta a `src/server.js` resuelven desde una shell.
+- Los logs de servidores MCP en Windsurf se muestran a través del panel de desarrollador de Cascade.

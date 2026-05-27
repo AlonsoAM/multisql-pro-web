@@ -1,0 +1,94 @@
+Claude Code is Anthropic's terminal-based coding agent and MultiSQL Pro's primary target. Once registered, every MCP tool we ship is available from any Claude Code session.
+
+## Prerequisites
+
+- MultiSQL Pro installed and at least one connection configured — see the [quickstart](/en/docs/getting-started).
+- Claude Code installed. Run `claude --version` to confirm.
+
+## Option A — register via CLI
+
+The fastest way:
+
+```bash
+claude mcp add multisql-pro -- node "C:/absolute/path/to/multisql-pro/src/server.js"
+```
+
+Notes:
+
+- The path **must be absolute**. Relative paths fail when Claude Code changes directories.
+- Everything after `--` is what Claude Code will run to start the MCP. We pass `node` plus the absolute path to `src/server.js`.
+- On macOS / Linux, drop the drive letter: `node "/Users/you/code/multisql-pro/src/server.js"`.
+
+Verify:
+
+```bash
+claude mcp list
+# multisql-pro · stdio · node C:/.../multisql-pro/src/server.js
+```
+
+## Option B — edit the MCP config manually
+
+If you prefer editing the config file directly, add an entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/absolute/path/to/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+Save the file and restart Claude Code.
+
+## Verify the integration
+
+Open a Claude Code session and ask:
+
+> *List available connections in multisql-pro*
+
+Claude should call the `list_connections` tool and return the connections you configured in the dashboard. If you see them, you're done.
+
+Try a real query next:
+
+> *Show me the columns of the Customers table in cloud*
+
+That triggers `describe_table` against your `cloud` connection.
+
+## Environment variables and working directory
+
+MultiSQL Pro reads `config.json` from the directory **next to** `src/server.js`. Since Claude Code launches the MCP from the path you configured, you don't need to set `cwd` explicitly — it just works.
+
+If you want to point at a different config file, set `MULTISQL_CONFIG`:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": ["C:/code/multisql-pro/src/server.js"],
+      "env": {
+        "MULTISQL_CONFIG": "C:/code/multisql-pro/config.work.json"
+      }
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+**The MCP doesn't show up in `claude mcp list`.**
+The path probably has a typo. Confirm with `Test-Path` (PowerShell) or `ls`.
+
+**Claude Code shows the MCP as failing.**
+Open the MCP logs in Claude Code's log panel. The MCP writes its own errors to stderr — most failures are config-related (missing `config.json`, invalid JSON, unreachable server).
+
+**Missing `config.json`.**
+Run any MultiSQL Pro command once from the project root to create it: `npm run config`.
+
+**Connections list, but `execute_sql` fails on prod.**
+That's the parser doing its job. See the [permission model](/en/docs/permissions).

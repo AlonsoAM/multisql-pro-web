@@ -1,0 +1,60 @@
+Claude Desktop is Claude's standalone app for macOS and Windows. It loads MCP servers from a single JSON file. Once registered, you can ask the desktop agent questions about every connection you configured.
+
+## Prerequisites
+
+- MultiSQL Pro installed and at least one connection configured. See the [quickstart](/en/docs/getting-started).
+- Claude Desktop installed and signed in.
+
+## 1. Locate the config file
+
+The config lives in different places depending on the OS:
+
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+If the file doesn't exist, create it.
+
+## 2. Add the MCP entry
+
+Open the file and add `multisql-pro` under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/absolute/path/to/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+If you already have other MCP servers in the file, just add a new key next to them.
+
+## 3. Restart Claude Desktop
+
+Quit Claude Desktop completely (right-click the menu bar / system tray icon → Quit, not just close the window) and reopen it. MCP servers load on startup.
+
+## 4. Verify
+
+In a new chat, ask:
+
+> *What MCP tools are available?*
+
+You should see `list_connections`, `execute_sql`, `list_tables`, and the rest. Try:
+
+> *Use multisql-pro to list the configured connections.*
+
+## Notes
+
+- The same `config.json` feeds Claude Desktop and Claude Code — the MCP server itself doesn't change across clients.
+- If Claude Desktop on Windows can't find `node`, try giving the absolute path to the Node executable:
+  ```json
+  {
+    "command": "C:/Program Files/nodejs/node.exe",
+    "args": ["C:/absolute/path/to/multisql-pro/src/server.js"]
+  }
+  ```
+- On macOS the same fix applies if Node is installed via Homebrew or Volta: use `which node` to find the right path.

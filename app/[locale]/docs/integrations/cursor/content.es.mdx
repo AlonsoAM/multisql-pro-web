@@ -1,0 +1,53 @@
+Cursor soporta el Model Context Protocol a través de su configuración. Una vez que registres MultiSQL Pro, el chat y composer de Cursor pueden consultar cada conexión que configuraste.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada.
+- Cursor instalado y con sesión iniciada.
+
+## 1. Abrir la configuración MCP de Cursor
+
+En Cursor:
+
+1. Abre **Settings** (icono de engranaje o `Ctrl/Cmd + ,`).
+2. Encuentra la sección **MCP**. Cursor lista los servidores MCP registrados actualmente y te permite agregar nuevos.
+
+También puedes editar la configuración JSON directamente. El archivo vive en:
+
+- **Windows**: `%APPDATA%\Cursor\User\mcp.json` (o similar — consulta los docs de Cursor para tu versión)
+- **macOS**: `~/Library/Application Support/Cursor/User/mcp.json`
+
+## 2. Agregar la entrada MCP
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+La forma es la misma que Claude Code y Claude Desktop. Si la UI de Cursor pide `command` y `args` como campos separados, llénalos en consecuencia.
+
+## 3. Reiniciar Cursor
+
+Cierra completamente y vuelve a abrir Cursor para que se cargue el nuevo servidor MCP.
+
+## 4. Verificar
+
+Abre un panel de chat / composer y pregunta:
+
+> *Usa multisql-pro para listar conexiones.*
+
+Deberías ver a Cursor invocar la herramienta `list_connections` y mostrar el resultado.
+
+## Notas
+
+- La UI de MCP de Cursor está evolucionando — si las rutas de menú arriba están desactualizadas en tu versión, consulta los docs oficiales de Cursor.
+- El servidor MCP en sí es idéntico entre clientes. El mismo `config.json` alimenta Claude Code, Claude Desktop, Cursor y Windsurf.
+- Si Cursor no puede encontrar Node, dale la ruta absoluta: `"command": "C:/Program Files/nodejs/node.exe"`.

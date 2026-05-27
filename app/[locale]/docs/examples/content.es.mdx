@@ -1,0 +1,178 @@
+Estos son los tipos de preguntas que los agentes típicamente reciben una vez que MultiSQL Pro está registrado. Cada ejemplo muestra el prompt, la llamada a herramienta que el agente hace, y la forma de respuesta.
+
+## Listar tablas en un schema
+
+> **Tú:** *Lista todas las tablas en el schema `dbo` de cloud.*
+
+```json title="llamada a herramienta"
+{
+  "name": "list_tables",
+  "arguments": { "connection": "cloud", "schema": "dbo" }
+}
+```
+
+```json title="resultado (truncado)"
+[
+  { "schema": "dbo", "name": "Customers", "type": "TABLE" },
+  { "schema": "dbo", "name": "Orders",    "type": "TABLE" },
+  { "schema": "dbo", "name": "Products",  "type": "TABLE" },
+  { "schema": "dbo", "name": "v_TopSales","type": "VIEW"  }
+]
+```
+
+## Describir una tabla
+
+> **Tú:** *Muéstrame las columnas de la tabla Orders en qa.*
+
+```json title="llamada a herramienta"
+{
+  "name": "describe_table",
+  "arguments": { "connection": "qa", "schema": "dbo", "table": "Orders" }
+}
+```
+
+```json title="resultado"
+{
+  "schema": "dbo",
+  "name": "Orders",
+  "primaryKey": ["id"],
+  "columns": [
+    { "name": "id",          "type": "int",            "nullable": false, "identity": true  },
+    { "name": "customerId",  "type": "int",            "nullable": false, "identity": false },
+    { "name": "total",       "type": "decimal(12,2)",  "nullable": false, "identity": false },
+    { "name": "createdAt",   "type": "datetime2",      "nullable": false, "identity": false }
+  ]
+}
+```
+
+## Buscar a través de tipos de objeto
+
+> **Tú:** *Encuentra cualquier stored procedure o función cuyo nombre mencione "invoice".*
+
+```json title="llamada a herramienta"
+{
+  "name": "search_objects",
+  "arguments": { "connection": "cloud", "pattern": "invoice" }
+}
+```
+
+```json title="resultado"
+[
+  { "schema": "dbo",   "name": "usp_GetInvoiceById",  "type": "PROCEDURE" },
+  { "schema": "dbo",   "name": "usp_RebuildInvoices", "type": "PROCEDURE" },
+  { "schema": "audit", "name": "fn_InvoiceHash",      "type": "FUNCTION"  }
+]
+```
+
+## Ejecutar una consulta de solo lectura en producción
+
+> **Tú:** *Muéstrame los 10 clientes con mayor revenue en producción.*
+
+```json title="llamada a herramienta"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "SELECT TOP 10 c.name, SUM(o.total) AS revenue FROM Customers c JOIN Orders o ON o.customerId = c.id GROUP BY c.name ORDER BY revenue DESC"
+  }
+}
+```
+
+```json title="resultado"
+{
+  "rows": [
+    { "name": "Acme Inc",  "revenue": 1284902 },
+    { "name": "Globex",     "revenue":  942118 },
+    { "name": "Initech",    "revenue":  811470 }
+  ],
+  "rowCount": 10,
+  "durationMs": 142,
+  "connection": "prod"
+}
+```
+
+Esto funciona porque `SELECT` está en la lista blanca de lectura. Consulta el [modelo de permisos](/es/docs/permissions).
+
+## Intentar escribir en producción (bloqueado)
+
+> **Tú:** *Actualiza el precio del producto 42 en prod a 99.*
+
+```json title="llamada a herramienta"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "UPDATE Products SET price = 99 WHERE id = 42"
+  }
+}
+```
+
+```json title="resultado — bloqueado"
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "La sentencia 'UPDATE' no está permitida en una conexión 'prod'.",
+  "statement": "UPDATE Products SET price = 99 WHERE id = 42",
+  "allowed": ["SELECT", "WITH", "DECLARE", "SET", "USE", "PRINT", "IF", "BEGIN", "COMMIT", "ROLLBACK"]
+}
+```
+
+El agente recibe un error estructurado y típicamente lo muestra al usuario sin reintentar. El motor de SQL Server nunca recibe la consulta.
+
+## Ejecutar DDL en dev
+
+> **Tú:** *Agrega una columna `lastLogin` a la tabla Users en dev.*
+
+```json title="llamada a herramienta"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "dev",
+    "query": "ALTER TABLE Users ADD lastLogin datetime2 NULL"
+  }
+}
+```
+
+```json title="resultado"
+{
+  "rows": [],
+  "rowCount": 0,
+  "durationMs": 89,
+  "connection": "dev"
+}
+```
+
+`dev` y `qa` permiten sentencias `ALTER`, `CREATE`, `DROP`, `EXEC` y DML.
+
+## Leer la definición de un stored procedure
+
+> **Tú:** *Muéstrame el cuerpo de `usp_GetInvoiceById`.*
+
+```json title="llamada a herramienta"
+{
+  "name": "get_object_definition",
+  "arguments": {
+    "connection": "cloud",
+    "schema": "dbo",
+    "name": "usp_GetInvoiceById"
+  }
+}
+```
+
+```sql title="definición del stored procedure"
+CREATE PROCEDURE dbo.usp_GetInvoiceById
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT * FROM Invoices WHERE id = @id;
+END
+```
+
+```json title="resultado (extracto)"
+{
+  "schema": "dbo",
+  "name": "usp_GetInvoiceById",
+  "type": "PROCEDURE",
+  "definition": "CREATE PROCEDURE dbo.usp_GetInvoiceById..."
+}
+```

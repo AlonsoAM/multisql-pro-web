@@ -1,0 +1,169 @@
+MultiSQL Pro exposes a small, parametric set of tools. Every database action takes a `connection` argument — the same `id` you assigned in the dashboard — so the agent doesn't need separate tools per environment.
+
+## Tool catalog
+
+| Tool                    | What it does                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `list_connections`      | Lists configured connections (id, name, type, authType, server, database).              |
+| `execute_sql`           | Runs SQL on a connection. Blocks writes on `prod` / `readonly`.                         |
+| `list_tables`           | Tables and views in a schema (default `dbo`).                                           |
+| `describe_table`        | Columns, types, nullability, primary key and identity of a table.                       |
+| `list_schemas`          | User-defined schemas.                                                                   |
+| `search_objects`        | Search tables, views, stored procedures and functions by name (LIKE).                   |
+| `get_object_definition` | Returns the `CREATE` / body of a stored procedure, function or view.                    |
+
+Every tool except `list_connections` requires `connection`.
+
+## `list_connections`
+
+Returns the configured connections. Use it as the agent's discovery entry point.
+
+```json title="invocation"
+{
+  "name": "list_connections",
+  "arguments": {}
+}
+```
+
+```json title="example response"
+[
+  { "id": "cloud", "name": "Cloud DB", "type": "dev", "authType": "sql", "server": "192.168.0.10", "database": "MY_DB" },
+  { "id": "prod",  "name": "Production DB", "type": "prod", "authType": "sql", "server": "10.0.0.20", "database": "MY_PROD_DB" }
+]
+```
+
+## `execute_sql`
+
+Runs a SQL query against a connection. On `prod` / `readonly`, the query is parsed and rejected before execution if any statement starts with a write verb. See the [permission model](/en/docs/permissions) for the full whitelist.
+
+```json title="parameters"
+{
+  "connection": "string  // required — id of a configured connection",
+  "query":      "string  // required — SQL to execute"
+}
+```
+
+```json title="invocation"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "SELECT TOP 10 * FROM dbo.Customers ORDER BY id DESC"
+  }
+}
+```
+
+```json title="example response"
+{
+  "rows": [ /* up to settings.maxRows */ ],
+  "rowCount": 10,
+  "durationMs": 142,
+  "connection": "prod"
+}
+```
+
+On rejection:
+
+```json title="rejected on prod"
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "Statement 'UPDATE' is not allowed on a 'prod' connection.",
+  "statement": "UPDATE Customers SET name = 'x' WHERE id = 1"
+}
+```
+
+## `list_tables`
+
+```json title="parameters"
+{
+  "connection": "string",
+  "schema":     "string  // optional — defaults to 'dbo'"
+}
+```
+
+```json title="example response"
+[
+  { "schema": "dbo", "name": "Customers", "type": "TABLE" },
+  { "schema": "dbo", "name": "Orders",    "type": "TABLE" },
+  { "schema": "dbo", "name": "v_TopSales","type": "VIEW"  }
+]
+```
+
+## `describe_table`
+
+```json title="parameters"
+{
+  "connection": "string",
+  "schema":     "string  // optional — defaults to 'dbo'",
+  "table":      "string"
+}
+```
+
+```json title="example response"
+{
+  "schema": "dbo",
+  "name": "Customers",
+  "primaryKey": ["id"],
+  "columns": [
+    { "name": "id",       "type": "int",          "nullable": false, "identity": true  },
+    { "name": "name",     "type": "nvarchar(120)","nullable": false, "identity": false },
+    { "name": "createdAt","type": "datetime2",    "nullable": false, "identity": false }
+  ]
+}
+```
+
+## `list_schemas`
+
+```json title="parameters"
+{ "connection": "string" }
+```
+
+```json title="example response"
+["dbo", "sales", "hr", "audit"]
+```
+
+## `search_objects`
+
+Fuzzy search across tables, views, stored procedures and functions by name. LIKE semantics — `%foo%`.
+
+```json title="parameters"
+{
+  "connection": "string",
+  "pattern":    "string  // required — partial name to match"
+}
+```
+
+```json title="example response"
+[
+  { "schema": "dbo",   "name": "usp_GetInvoiceById", "type": "PROCEDURE" },
+  { "schema": "audit", "name": "fn_InvoiceHash",     "type": "FUNCTION"  },
+  { "schema": "dbo",   "name": "InvoiceLines",       "type": "TABLE"     }
+]
+```
+
+## `get_object_definition`
+
+Returns the source of a stored procedure, function or view. For tables, prefer `describe_table`.
+
+```json title="parameters"
+{
+  "connection": "string",
+  "schema":     "string  // optional — defaults to 'dbo'",
+  "name":       "string  // object name"
+}
+```
+
+```json title="example response"
+{
+  "schema": "dbo",
+  "name": "usp_GetInvoiceById",
+  "type": "PROCEDURE",
+  "definition": "CREATE PROCEDURE dbo.usp_GetInvoiceById ..."
+}
+```
+
+## Behavior notes
+
+- All tools apply `settings.queryTimeout` (default 60s) and `settings.maxRows` (default 10000).
+- The `connection` parameter is validated against the configured set. An unknown id returns a clear error.
+- Pools are created lazily and reused across calls. The server closes pools cleanly on `SIGINT` / `SIGTERM`.

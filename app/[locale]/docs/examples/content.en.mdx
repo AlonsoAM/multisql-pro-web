@@ -1,0 +1,178 @@
+These are the kinds of questions agents typically get once MultiSQL Pro is registered. Each example shows the prompt, the tool call the agent makes, and the response shape.
+
+## List tables in a schema
+
+> **You:** *List every table in the `dbo` schema of cloud.*
+
+```json title="tool call"
+{
+  "name": "list_tables",
+  "arguments": { "connection": "cloud", "schema": "dbo" }
+}
+```
+
+```json title="result (truncated)"
+[
+  { "schema": "dbo", "name": "Customers", "type": "TABLE" },
+  { "schema": "dbo", "name": "Orders",    "type": "TABLE" },
+  { "schema": "dbo", "name": "Products",  "type": "TABLE" },
+  { "schema": "dbo", "name": "v_TopSales","type": "VIEW"  }
+]
+```
+
+## Describe a table
+
+> **You:** *Show me the columns of the Orders table in qa.*
+
+```json title="tool call"
+{
+  "name": "describe_table",
+  "arguments": { "connection": "qa", "schema": "dbo", "table": "Orders" }
+}
+```
+
+```json title="result"
+{
+  "schema": "dbo",
+  "name": "Orders",
+  "primaryKey": ["id"],
+  "columns": [
+    { "name": "id",          "type": "int",            "nullable": false, "identity": true  },
+    { "name": "customerId",  "type": "int",            "nullable": false, "identity": false },
+    { "name": "total",       "type": "decimal(12,2)",  "nullable": false, "identity": false },
+    { "name": "createdAt",   "type": "datetime2",      "nullable": false, "identity": false }
+  ]
+}
+```
+
+## Search across object types
+
+> **You:** *Find any stored procedure or function whose name mentions "invoice".*
+
+```json title="tool call"
+{
+  "name": "search_objects",
+  "arguments": { "connection": "cloud", "pattern": "invoice" }
+}
+```
+
+```json title="result"
+[
+  { "schema": "dbo",   "name": "usp_GetInvoiceById",  "type": "PROCEDURE" },
+  { "schema": "dbo",   "name": "usp_RebuildInvoices", "type": "PROCEDURE" },
+  { "schema": "audit", "name": "fn_InvoiceHash",      "type": "FUNCTION"  }
+]
+```
+
+## Run a read-only query on production
+
+> **You:** *Show me the top 10 customers by revenue in production.*
+
+```json title="tool call"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "SELECT TOP 10 c.name, SUM(o.total) AS revenue FROM Customers c JOIN Orders o ON o.customerId = c.id GROUP BY c.name ORDER BY revenue DESC"
+  }
+}
+```
+
+```json title="result"
+{
+  "rows": [
+    { "name": "Acme Inc",  "revenue": 1284902 },
+    { "name": "Globex",     "revenue":  942118 },
+    { "name": "Initech",    "revenue":  811470 }
+  ],
+  "rowCount": 10,
+  "durationMs": 142,
+  "connection": "prod"
+}
+```
+
+This works because `SELECT` is on the read whitelist. See the [permission model](/en/docs/permissions).
+
+## Try to write on production (blocked)
+
+> **You:** *Update the price of product 42 in prod to 99.*
+
+```json title="tool call"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "UPDATE Products SET price = 99 WHERE id = 42"
+  }
+}
+```
+
+```json title="result — blocked"
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "Statement 'UPDATE' is not allowed on a 'prod' connection.",
+  "statement": "UPDATE Products SET price = 99 WHERE id = 42",
+  "allowed": ["SELECT", "WITH", "DECLARE", "SET", "USE", "PRINT", "IF", "BEGIN", "COMMIT", "ROLLBACK"]
+}
+```
+
+The agent receives a structured error and typically surfaces it to the user without retrying. The SQL Server engine never sees the query.
+
+## Run DDL on dev
+
+> **You:** *Add a `lastLogin` column to the Users table in dev.*
+
+```json title="tool call"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "dev",
+    "query": "ALTER TABLE Users ADD lastLogin datetime2 NULL"
+  }
+}
+```
+
+```json title="result"
+{
+  "rows": [],
+  "rowCount": 0,
+  "durationMs": 89,
+  "connection": "dev"
+}
+```
+
+`dev` and `qa` allow `ALTER`, `CREATE`, `DROP`, `EXEC` and DML statements.
+
+## Read a stored procedure definition
+
+> **You:** *Show me the body of `usp_GetInvoiceById`.*
+
+```json title="tool call"
+{
+  "name": "get_object_definition",
+  "arguments": {
+    "connection": "cloud",
+    "schema": "dbo",
+    "name": "usp_GetInvoiceById"
+  }
+}
+```
+
+```sql title="stored procedure definition"
+CREATE PROCEDURE dbo.usp_GetInvoiceById
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT * FROM Invoices WHERE id = @id;
+END
+```
+
+```json title="result (excerpt)"
+{
+  "schema": "dbo",
+  "name": "usp_GetInvoiceById",
+  "type": "PROCEDURE",
+  "definition": "CREATE PROCEDURE dbo.usp_GetInvoiceById..."
+}
+```

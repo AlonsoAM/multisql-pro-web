@@ -1,0 +1,80 @@
+Si te encuentras con un muro, escanea esta página primero. La mayoría de los problemas son ambientales.
+
+## El cliente MCP no detecta el servidor
+
+- Verifica Node: `node --version` debe reportar 18 o superior.
+- Confirma que la ruta a `src/server.js` en tu configuración MCP es **absoluta** y existe. Las rutas relativas fallan porque los clientes MCP corren con su propio directorio de trabajo.
+- Mira el panel de logs MCP del cliente. Claude Code, Claude Desktop, Cursor y Windsurf exponen stderr de los servidores MCP. Los errores usualmente aparecen ahí inmediatamente.
+
+## `Login failed for user`
+
+- Confirma el usuario y contraseña en el dashboard con el botón **Probar** — te dice la respuesta del motor.
+- Si estás en **autenticación Windows**, asegúrate de que `authType` sea `windows` y el campo `domain` sea correcto. El botón **Auto** usa la identidad del proceso del dashboard — consulta el siguiente punto.
+- En el lado del SQL Server, confirma que el modo de autenticación (mixto vs. solo Windows) permite tu tipo de login.
+
+## El botón "Auto" reportó el usuario Windows incorrecto
+
+`/api/windows-identity` retorna la identidad del **proceso que corre el dashboard** (`node`). Si iniciaste el dashboard tú mismo con `npm run config`, esa es tu cuenta interactiva de Windows. Si el dashboard corre como un servicio de Windows bajo una cuenta diferente, eso es lo que verás.
+
+Para obtener tu usuario interactivo, ejecuta `npm run config` desde tu propia sesión en lugar de a través de un servicio.
+
+## El botón "Cargar" no lista bases de datos
+
+- Tu login SQL necesita `VIEW ANY DATABASE` o sysadmin para enumerar `sys.databases`. Sin eso, la consulta no retorna nada.
+- Verifica que el servidor y puerto sean accesibles: `Test-NetConnection` en PowerShell o `nc -vz host 1433` en bash.
+
+## `self signed certificate` / `certificate not trusted`
+
+Los valores por defecto (`encrypt: false`, `trustServerCertificate: true`) manejan redes internas. En producción real con TLS:
+
+```json
+{
+  "options": {
+    "encrypt": true,
+    "trustServerCertificate": false
+  }
+}
+```
+
+Necesitarás un certificado que sea realmente confiable por el OS donde corre el MCP.
+
+## Una conexión `prod` rechaza lo que parece un SELECT
+
+El parser bloquea cualquier cosa fuera de la lista blanca de lectura. Errores comunes:
+
+- La consulta contiene `EXEC dbo.usp_Algo`. `EXEC` está bloqueado en conexiones de solo lectura — el SP podría escribir. Consulta el [modelo de permisos](/es/docs/permissions) para el razonamiento.
+- La consulta comienza con `WITH ... INSERT INTO ...`. El CTE envolviendo una sentencia de escritura sigue siendo una escritura; el segundo verbo falla la verificación.
+- La consulta tiene múltiples sentencias separadas por `;`, y una de ellas es una escritura. Cada sentencia se verifica independientemente.
+
+## El puerto del dashboard ya está en uso
+
+```bash
+# Windows
+netstat -ano | findstr :4567
+
+# macOS / Linux
+lsof -i :4567
+```
+
+Cambia `settings.dashboardPort` en `config.json` a un puerto libre (ej. `4568`) y reinicia `npm run config`.
+
+## El toggle de tema no parece hacer nada
+
+- Revisa `localStorage["multisql.theme"]` en DevTools. Debería ser `light`, `dark`, o ausente (Sistema).
+- Una extensión del navegador o bloqueador de contenido puede estar eliminando el script de tema inline. Desactiva extensiones en la página para confirmar.
+- Asegúrate de que `prefers-color-scheme` reporte lo que esperas a nivel del OS. Algunos escritorios Linux reportan `no-preference`, que por defecto va a light.
+
+## No hay Node.js instalado
+
+- Descarga el instalador LTS desde [nodejs.org](https://nodejs.org/).
+- En Windows: `winget install OpenJS.NodeJS.LTS`.
+- En macOS: `brew install node`.
+- En Linux: usa el package manager de tu distro o [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm).
+
+## Los pools no se cierran al salir
+
+El servidor MCP instala handlers `SIGINT` y `SIGTERM` que drenan los pools gradualmente. Si tu cliente no envía esas señales al cerrar (algunos no lo hacen), el proceso puede salir bruscamente y dejar una conexión TCP inactiva por unos segundos hasta que el kernel la recoja. Eso es normal e inofensivo.
+
+## ¿Algo más?
+
+Abre un issue en el repo de GitHub — incluye el OS, versión de Node, el cliente (Claude Code / Cursor / etc.), y cualquier output del panel de logs MCP del cliente. Cuanto más contexto, más rápida la solución.

@@ -1,0 +1,60 @@
+Claude Desktop es la app independiente de Claude para macOS y Windows. Carga servidores MCP desde un único archivo JSON. Una vez registrado, puedes hacerle preguntas al agente de escritorio sobre cada conexión que configuraste.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada. Consulta el [inicio rápido](/es/docs/getting-started).
+- Claude Desktop instalado y con sesión iniciada.
+
+## 1. Ubicar el archivo de configuración
+
+La configuración vive en diferentes lugares según el OS:
+
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+Si el archivo no existe, créalo.
+
+## 2. Agregar la entrada MCP
+
+Abre el archivo y agrega `multisql-pro` bajo `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+Si ya tienes otros servidores MCP en el archivo, simplemente agrega una nueva clave junto a ellos.
+
+## 3. Reiniciar Claude Desktop
+
+Cierra completamente Claude Desktop (clic derecho en el icono de la barra de menú / bandeja del sistema → Salir, no solo cerrar la ventana) y vuélvelo a abrir. Los servidores MCP se cargan al inicio.
+
+## 4. Verificar
+
+En un chat nuevo, pregunta:
+
+> *¿Qué herramientas MCP están disponibles?*
+
+Deberías ver `list_connections`, `execute_sql`, `list_tables`, y el resto. Prueba:
+
+> *Usa multisql-pro para listar las conexiones configuradas.*
+
+## Notas
+
+- El mismo `config.json` alimenta Claude Desktop y Claude Code — el servidor MCP en sí no cambia entre clientes.
+- Si Claude Desktop en Windows no puede encontrar `node`, intenta dar la ruta absoluta al ejecutable de Node:
+  ```json
+  {
+    "command": "C:/Program Files/nodejs/node.exe",
+    "args": ["C:/ruta/absoluta/a/multisql-pro/src/server.js"]
+  }
+  ```
+- En macOS aplica el mismo fix si Node está instalado vía Homebrew o Volta: usa `which node` para encontrar la ruta correcta.

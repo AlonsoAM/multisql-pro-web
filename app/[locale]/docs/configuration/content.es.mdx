@@ -1,0 +1,130 @@
+La forma recomendada de configurar MultiSQL Pro es el **dashboard** — una UI local Express + vanilla que viene con el proyecto. Editar `config.json` a mano también está soportado y se documenta al final de esta página.
+
+## Lanzar el dashboard
+
+Desde la raíz del proyecto:
+
+```bash
+npm run config
+```
+
+Esto inicia un servidor Express en `http://localhost:4567` y abre tu navegador por defecto. El dashboard se vincula solo a `localhost` — **no** está diseñado para ser expuesto a la red sin una capa de autenticación delante.
+
+Verás:
+
+- **Estadísticas en vivo** — total de conexiones, en línea, fuera de línea, conteo de producción.
+- **Grilla de conexiones** — una tarjeta por conexión, con borde coloreado y un punto de estado mostrando en línea / fuera de línea / sondeando + latencia en ms.
+- **Búsqueda** — filtra por id, nombre, base de datos o host. Útil cuando superas las diez conexiones.
+- **+ Nueva conexión** — abre el modal para crear una.
+- **Configuración** — timeout de consulta, máximo de filas devueltas, puerto del dashboard.
+
+## Crear una conexión
+
+El modal de nuevo/edición tiene estos campos:
+
+| Campo            | Detalle                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| **ID**           | Clave única (`cloud`, `qa`, `prod`, ...). Esto es lo que el agente usa para dirigirse.    |
+| **Nombre**       | Etiqueta humana (ej. *BD Producción Cloud*).                                              |
+| **Tipo**         | `dev` / `qa` (lectura+escritura+DDL) o `readonly` / `prod` (protegido, solo lectura).     |
+| **Auth**         | `SQL Server` (usuario/contraseña) o `Windows (NTLM)` con dominio.                         |
+| **Servidor**     | Host o IP de la instancia de SQL Server.                                                  |
+| **Puerto**       | 1433 a menos que tu servidor use un puerto personalizado.                                 |
+| **Base de datos**| Escribe directamente, o usa el botón **Cargar** (ver abajo).                              |
+| **Dominio**      | Solo autenticación Windows. El botón **Auto** detecta la identidad actual de Windows.     |
+| **Usuario / Pass**| Credenciales del motor.                                                                   |
+| **Encrypt**      | Cifrado TLS (opción de `mssql`).                                                          |
+| **Trust cert**   | Confiar en certificados auto-firmados. Ponlo en `false` en producción real con cert válido.|
+
+### El botón "Cargar" (bases de datos)
+
+Si llenas servidor + usuario + contraseña y haces clic en **Cargar**, el dashboard:
+
+1. Se conecta a `master` con esas credenciales.
+2. Lee `sys.databases`, filtrando `master`, `tempdb`, `model`, `msdb`.
+3. Pobla un `<datalist>` para que puedas autocompletar el nombre de la base de datos.
+
+Útil cuando estás explorando un servidor nuevo, o no recuerdas el nombre exacto de la base de datos. Tu usuario necesita `VIEW ANY DATABASE` (o sysadmin) para enumerar `sys.databases`.
+
+### El botón "Auto" (dominio Windows)
+
+Solo visible cuando **Auth = Windows (NTLM)**. Llama a `/api/windows-identity` que retorna:
+
+- **Dominio** ← `process.env.USERDOMAIN` (con `USERDNSDOMAIN` / hostname como fallback).
+- **Usuario** ← `os.userInfo().username`.
+
+> La identidad detectada es la que corre el **proceso del dashboard**, no necesariamente tu usuario interactivo. Si el dashboard corre como un servicio de Windows bajo una cuenta diferente, eso es lo que obtendrás.
+
+> Las contraseñas nunca se retornan al cliente del dashboard. Aparecen como `********`. Al editar una conexión, dejar la contraseña en blanco mantiene el valor previamente almacenado.
+
+## Configuración global
+
+El panel de Configuración persiste tres valores a `config.json` bajo `settings`:
+
+- **queryTimeout** — milisegundos antes de que una consulta sea abortada. Por defecto `60000`.
+- **maxRows** — máximo de filas devueltas por consulta. Por defecto `10000`.
+- **dashboardPort** — puerto al que se vincula el dashboard. Por defecto `4567`. Cambia si algo más está en 4567.
+
+## Configuración manual
+
+Si prefieres JSON, edita `config.json` directamente:
+
+```json
+{
+  "connections": {
+    "cloud": {
+      "name": "BD Cloud",
+      "type": "dev",
+      "config": {
+        "authType": "sql",
+        "server": "192.168.0.10",
+        "port": 1433,
+        "database": "MI_BD",
+        "user": "miUsuario",
+        "password": "miPassword",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    },
+    "intranet": {
+      "name": "BD Intranet",
+      "type": "dev",
+      "config": {
+        "authType": "windows",
+        "server": "SRV-SQL01",
+        "port": 1433,
+        "database": "MI_BD",
+        "domain": "MIDOMINIO",
+        "user": "miUsuarioWindows",
+        "password": "miPasswordWindows",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    },
+    "prod": {
+      "name": "BD Produccion",
+      "type": "prod",
+      "config": {
+        "authType": "sql",
+        "server": "10.0.0.20",
+        "port": 1433,
+        "database": "MI_BD_PROD",
+        "user": "lectorProd",
+        "password": "***",
+        "options": { "encrypt": false, "trustServerCertificate": true }
+      }
+    }
+  },
+  "settings": {
+    "queryTimeout": 60000,
+    "maxRows": 10000,
+    "dashboardPort": 4567
+  }
+}
+```
+
+Mantén este archivo fuera de git. Contiene credenciales reales.
+
+## Atajos de teclado en el dashboard
+
+- `Esc` — cerrar el modal abierto.
+- `Enter` — confirmar el modal activo.
+- Diálogo de confirmación personalizado — el dashboard **no** usa el `confirm()` nativo del navegador para acciones destructivas.

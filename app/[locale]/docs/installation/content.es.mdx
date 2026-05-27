@@ -1,0 +1,83 @@
+MultiSQL Pro corre en cualquier lugar donde corra Node 18. No hay servicio que instalar, binario que compilar ni daemon que registrar. Elige la ruta que coincida con tu flujo de trabajo.
+
+## Requisitos
+
+| Qué                 | Mínimo                       |
+| ------------------- | ---------------------------- |
+| Node.js             | 18.0.0                       |
+| SQL Server          | 2016 (TCP/IP habilitado)     |
+| Disco               | ~80 MB después de `npm install` |
+| Red                 | accesible desde tu máquina   |
+
+Verifica Node:
+
+```bash
+node --version
+# v18.0.0 o superior
+```
+
+Si Node falta, instala el LTS desde [nodejs.org](https://nodejs.org/) o vía `winget install OpenJS.NodeJS.LTS` en Windows.
+
+## Opción A — clonar desde GitHub
+
+La ruta recomendada. Obtienes `git pull` para actualizaciones.
+
+```bash
+git clone https://github.com/AlonsoAM/multisql-pro.git
+cd multisql-pro
+npm install
+```
+
+## Opción B — descargar el ZIP
+
+Si no tienes git instalado:
+
+1. Descarga el ZIP del código fuente desde la página de [releases de GitHub](https://github.com/AlonsoAM/multisql-pro/releases) (o el botón verde **Code** → **Download ZIP**).
+2. Descomprímelo en un lugar estable. La ruta se convierte en parte de la configuración de tu cliente MCP, así que no lo muevas después.
+3. Abre una terminal en la carpeta descomprimida y ejecuta:
+
+```bash
+npm install
+```
+
+## Primer arranque
+
+La primera vez que ejecutes cualquier comando de MultiSQL Pro, el servidor busca un `config.json` junto a `package.json`. Si no existe, copia `config.example.json` a `config.json` y continúa.
+
+Ese archivo está ignorado en git. Contiene tus credenciales reales y vive solo en tu máquina.
+
+```bash
+npm run config
+# →  Configuración no encontrada. Creando config.json desde config.example.json…
+# →  Dashboard listo en http://localhost:4567
+```
+
+## Verificar accesibilidad del SQL Server
+
+Antes de perder tiempo en el dashboard, confirma que el SQL Server es accesible desde la máquina donde correrás el MCP:
+
+```bash
+# PowerShell
+Test-NetConnection -ComputerName TU_SERVIDOR -Port 1433
+
+# bash / WSL
+nc -vz TU_SERVIDOR 1433
+```
+
+Si eso falla, arregla el firewall antes de continuar — el MCP no puede ayudar si TCP/1433 no está abierto.
+
+## Actualizar después
+
+Para actualizar un checkout existente:
+
+```bash
+cd multisql-pro
+git pull
+npm install
+```
+
+Tu `config.json` se preserva entre actualizaciones.
+
+## Siguientes pasos
+
+Ve a [Configuración del dashboard](/es/docs/configuration) para agregar tu primera conexión, o salta directo a la [integración con Claude Code](/es/docs/integrations/claude-code) si ya editaste `config.json` a mano.

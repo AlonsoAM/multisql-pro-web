@@ -1,0 +1,80 @@
+If you hit a wall, scan this page first. Most issues are environmental.
+
+## The MCP client doesn't detect the server
+
+- Check Node: `node --version` must report 18 or higher.
+- Confirm the path to `src/server.js` in your MCP config is **absolute** and exists. Relative paths fail because MCP clients run with their own working directory.
+- Look at the client's MCP log panel. Claude Code, Claude Desktop, Cursor and Windsurf expose stderr from MCP servers. Errors usually show up there immediately.
+
+## `Login failed for user`
+
+- Confirm the user and password in the dashboard via the **Test** button — it tells you what the engine responded.
+- If you're on **Windows authentication**, make sure `authType` is `windows` and the `domain` field is correct. The **Auto** button uses the dashboard process identity — see the next point.
+- On the SQL Server side, confirm the auth mode (mixed vs. Windows-only) allows your login type.
+
+## The "Auto" button reported the wrong Windows user
+
+`/api/windows-identity` returns the identity of the **process running the dashboard** (`node`). If you started the dashboard yourself with `npm run config`, that's your interactive Windows account. If the dashboard runs as a Windows service under a different account, that's what you'll see.
+
+To get your interactive user, run `npm run config` from your own session rather than through a service.
+
+## The "Load" button doesn't list databases
+
+- Your SQL login needs `VIEW ANY DATABASE` or sysadmin to enumerate `sys.databases`. Without it, the query returns nothing.
+- Verify the server and port are reachable: `Test-NetConnection` in PowerShell or `nc -vz host 1433` in bash.
+
+## `self signed certificate` / `certificate not trusted`
+
+The defaults (`encrypt: false`, `trustServerCertificate: true`) handle internal networks. In real production with TLS:
+
+```json
+{
+  "options": {
+    "encrypt": true,
+    "trustServerCertificate": false
+  }
+}
+```
+
+You'll need a certificate that is actually trusted by the OS where the MCP runs.
+
+## A `prod` connection rejects what looks like a SELECT
+
+The parser blocks anything outside the read whitelist. Common mistakes:
+
+- The query contains `EXEC dbo.usp_Something`. `EXEC` is blocked on read-only connections — the SP might write. See the [permission model](/en/docs/permissions) for the reasoning.
+- The query starts with `WITH ... INSERT INTO ...`. A CTE wrapping a write statement is still a write; the second verb fails the check.
+- The query has multiple statements separated by `;`, and one of them is a write. Each statement is checked independently.
+
+## The dashboard port is already in use
+
+```bash
+# Windows
+netstat -ano | findstr :4567
+
+# macOS / Linux
+lsof -i :4567
+```
+
+Change `settings.dashboardPort` in `config.json` to a free port (e.g. `4568`) and restart `npm run config`.
+
+## The theme toggle doesn't seem to do anything
+
+- Check `localStorage["multisql.theme"]` in DevTools. It should be `light`, `dark`, or absent (System).
+- A browser extension or content blocker may be stripping the inline theme script. Disable extensions on the page to confirm.
+- Make sure `prefers-color-scheme` reports what you expect at the OS level. Some Linux desktops report `no-preference`, which defaults to light.
+
+## No Node.js installed
+
+- Download the LTS installer from [nodejs.org](https://nodejs.org/).
+- On Windows: `winget install OpenJS.NodeJS.LTS`.
+- On macOS: `brew install node`.
+- On Linux: use your distro's package manager or [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm).
+
+## Pools don't close on exit
+
+The MCP server installs `SIGINT` and `SIGTERM` handlers that drain pools gracefully. If your client doesn't send those signals on close (some don't), the process may exit abruptly and leave an idle TCP connection for a few seconds until the kernel reclaims it. That's normal and harmless.
+
+## Anything else?
+
+Open an issue on the GitHub repo — include the OS, Node version, the client (Claude Code / Cursor / etc.), and any output from the client's MCP log panel. More context, faster fix.

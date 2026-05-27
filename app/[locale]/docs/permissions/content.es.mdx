@@ -1,0 +1,79 @@
+La característica estrella. Cada conexión tiene un `type` que decide qué puede hacer el agente sobre ella. Los entornos de solo lectura se aplican **antes** de que la consulta llegue a SQL Server — el motor nunca ve una sentencia insegura.
+
+## Los cuatro tipos
+
+| tipo       | SELECT | INSERT / UPDATE / DELETE | DDL (CREATE / ALTER / DROP / ...) | EXEC   |
+| ---------- | ------ | ------------------------ | --------------------------------- | ------ |
+| `dev`      | sí     | sí                       | sí                                | sí     |
+| `qa`       | sí     | sí                       | sí                                | sí     |
+| `readonly` | sí     | **no**                   | **no**                            | **no** |
+| `prod`     | sí     | **no**                   | **no**                            | **no** |
+
+`dev` y `qa` son funcionalmente idénticos — las etiquetas existen para ayudar a los humanos a distinguir entornos en el dashboard y en las respuestas del agente.
+
+`readonly` y `prod` también son funcionalmente idénticos. La diferencia es la intención: etiqueta una réplica de producción como `prod`. Etiqueta un espejo de reportes o una base de datos analítica compartida como `readonly`.
+
+## Cómo funciona el parser
+
+Cuando se llama `execute_sql` en una conexión `readonly` o `prod`, la consulta pasa por un guardián antes de ser enviada al driver:
+
+1. **Eliminar comentarios.** Tanto comentarios `-- línea` como `/* bloque */` son removidos.
+2. **Separar por sentencia.** La cadena se separa en `;`, pero solo cuando el punto y coma está **fuera** de `'...'`, `"..."` o `[...]` — así un literal de cadena que contiene `;` no se corta a la mitad.
+3. **Extraer el primer verbo.** Para cada sentencia resultante, el primer token no-espacio se normaliza a mayúsculas.
+4. **Comparar contra la lista blanca de lectura.** Si el verbo de alguna sentencia no está en la lista blanca, toda la consulta es rechazada con un error claro.
+
+La lista blanca de verbos permitidos en conexiones de solo lectura:
+
+```text
+SELECT     WITH      DECLARE   SET       USE
+PRINT      IF        BEGIN     COMMIT    ROLLBACK
+```
+
+Si alguna sentencia comienza con cualquier otra cosa — `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `DROP`, `CREATE`, `ALTER`, `TRUNCATE`, `EXEC`, `EXECUTE`, ... — la consulta nunca sale del servidor.
+
+## Por qué `EXEC` está bloqueado en readonly
+
+Un stored procedure puede hacer cualquier cosa. El parser no puede razonar sobre qué hay dentro de `dbo.usp_DoStuff` sin ejecutarlo. La elección conservadora es bloquear todo `EXEC` en conexiones de solo lectura, punto.
+
+Si necesitas ejecutar un stored procedure conocido como seguro de solo `SELECT` en producción, dos opciones:
+
+- Transforma el SP en una vista o función con valores de tabla y llama a eso en su lugar.
+- Mueve la llamada a un entorno no-producción (una réplica de reportes etiquetada `readonly`) donde el parser aún aplica, pero has separado la capa de datos.
+
+## Defensa en profundidad
+
+El parser es la **primera** línea de defensa, no la única. Recomendamos fuertemente también crear un usuario SQL en el motor con los permisos mínimos que necesitas:
+
+```sql
+-- En el servidor de producción, con sysadmin:
+CREATE LOGIN multisql_ro WITH PASSWORD = 'una-contraseña-segura';
+USE MiBaseDeDatosProd;
+CREATE USER multisql_ro FOR LOGIN multisql_ro;
+EXEC sp_addrolemember 'db_datareader', 'multisql_ro';
+```
+
+Luego configura la conexión `prod` en MultiSQL Pro para usar `multisql_ro`. Ahora incluso si el parser tuviera un bug, el motor rechazaría la escritura de todos modos.
+
+## Elegir un tipo de conexión
+
+Un árbol de decisión rápido:
+
+- ¿Es un **sandbox personal** o un SQL Server local que no compartes? → `dev`.
+- ¿Es un entorno **QA / staging compartido** al que tu equipo escribe? → `qa`.
+- ¿Es un **espejo de reportes** o **réplica de solo lectura** al que el agente nunca debería escribir, pero no es estrictamente producción? → `readonly`.
+- ¿Es **la base de datos de producción real**? → `prod`.
+
+Los dos tipos de solo lectura se comportan igual — elige el nombre que coincida con el modelo mental de tu equipo.
+
+## Qué ve el agente en el rechazo
+
+Cuando el parser bloquea una consulta, la herramienta retorna un error estructurado explicando qué pasó. Los agentes típicamente lo muestran al usuario en lugar de reintentar:
+
+```json
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "La sentencia 'UPDATE' no está permitida en una conexión 'prod'.",
+  "statement": "UPDATE Customers SET name = 'x' WHERE id = 1",
+  "allowed": ["SELECT", "WITH", "DECLARE", "SET", "USE", "PRINT", "IF", "BEGIN", "COMMIT", "ROLLBACK"]
+}
+```

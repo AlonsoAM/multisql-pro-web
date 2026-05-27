@@ -1,0 +1,169 @@
+MultiSQL Pro expone un conjunto pequeño y paramétrico de herramientas. Cada acción de base de datos toma un argumento `connection` — el mismo `id` que asignaste en el dashboard — así el agente no necesita herramientas separadas por entorno.
+
+## Catálogo de herramientas
+
+| Herramienta             | Qué hace                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `list_connections`      | Lista conexiones configuradas (id, nombre, tipo, authType, servidor, base de datos).    |
+| `execute_sql`           | Ejecuta SQL en una conexión. Bloquea escrituras en `prod` / `readonly`.                 |
+| `list_tables`           | Tablas y vistas en un schema (por defecto `dbo`).                                       |
+| `describe_table`        | Columnas, tipos, nulabilidad, primary key e identity de una tabla.                      |
+| `list_schemas`          | Schemas definidos por el usuario.                                                       |
+| `search_objects`        | Busca tablas, vistas, stored procedures y funciones por nombre (LIKE).                  |
+| `get_object_definition` | Retorna el `CREATE` / cuerpo de un stored procedure, función o vista.                   |
+
+Cada herramienta excepto `list_connections` requiere `connection`.
+
+## `list_connections`
+
+Retorna las conexiones configuradas. Úsalo como punto de entrada de descubrimiento del agente.
+
+```json title="invocación"
+{
+  "name": "list_connections",
+  "arguments": {}
+}
+```
+
+```json title="respuesta de ejemplo"
+[
+  { "id": "cloud", "name": "BD Cloud", "type": "dev", "authType": "sql", "server": "192.168.0.10", "database": "MI_BD" },
+  { "id": "prod",  "name": "BD Produccion", "type": "prod", "authType": "sql", "server": "10.0.0.20", "database": "MI_BD_PROD" }
+]
+```
+
+## `execute_sql`
+
+Ejecuta una consulta SQL contra una conexión. En `prod` / `readonly`, la consulta es parseada y rechazada antes de ejecución si alguna sentencia comienza con un verbo de escritura. Consulta el [modelo de permisos](/es/docs/permissions) para la lista blanca completa.
+
+```json title="parámetros"
+{
+  "connection": "string  // requerido — id de una conexión configurada",
+  "query":      "string  // requerido — SQL a ejecutar"
+}
+```
+
+```json title="invocación"
+{
+  "name": "execute_sql",
+  "arguments": {
+    "connection": "prod",
+    "query": "SELECT TOP 10 * FROM dbo.Customers ORDER BY id DESC"
+  }
+}
+```
+
+```json title="respuesta de ejemplo"
+{
+  "rows": [ /* hasta settings.maxRows */ ],
+  "rowCount": 10,
+  "durationMs": 142,
+  "connection": "prod"
+}
+```
+
+En rechazo:
+
+```json title="rechazado en prod"
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "La sentencia 'UPDATE' no está permitida en una conexión 'prod'.",
+  "statement": "UPDATE Customers SET name = 'x' WHERE id = 1"
+}
+```
+
+## `list_tables`
+
+```json title="parámetros"
+{
+  "connection": "string",
+  "schema":     "string  // opcional — por defecto 'dbo'"
+}
+```
+
+```json title="respuesta de ejemplo"
+[
+  { "schema": "dbo", "name": "Customers", "type": "TABLE" },
+  { "schema": "dbo", "name": "Orders",    "type": "TABLE" },
+  { "schema": "dbo", "name": "v_TopSales","type": "VIEW"  }
+]
+```
+
+## `describe_table`
+
+```json title="parámetros"
+{
+  "connection": "string",
+  "schema":     "string  // opcional — por defecto 'dbo'",
+  "table":      "string"
+}
+```
+
+```json title="respuesta de ejemplo"
+{
+  "schema": "dbo",
+  "name": "Customers",
+  "primaryKey": ["id"],
+  "columns": [
+    { "name": "id",       "type": "int",          "nullable": false, "identity": true  },
+    { "name": "name",     "type": "nvarchar(120)","nullable": false, "identity": false },
+    { "name": "createdAt","type": "datetime2",    "nullable": false, "identity": false }
+  ]
+}
+```
+
+## `list_schemas`
+
+```json title="parámetros"
+{ "connection": "string" }
+```
+
+```json title="respuesta de ejemplo"
+["dbo", "sales", "hr", "audit"]
+```
+
+## `search_objects`
+
+Búsqueda difusa a través de tablas, vistas, stored procedures y funciones por nombre. Semántica LIKE — `%foo%`.
+
+```json title="parámetros"
+{
+  "connection": "string",
+  "pattern":    "string  // requerido — nombre parcial a coincidir"
+}
+```
+
+```json title="respuesta de ejemplo"
+[
+  { "schema": "dbo",   "name": "usp_GetInvoiceById", "type": "PROCEDURE" },
+  { "schema": "audit", "name": "fn_InvoiceHash",     "type": "FUNCTION"  },
+  { "schema": "dbo",   "name": "InvoiceLines",       "type": "TABLE"     }
+]
+```
+
+## `get_object_definition`
+
+Retorna el fuente de un stored procedure, función o vista. Para tablas, prefiere `describe_table`.
+
+```json title="parámetros"
+{
+  "connection": "string",
+  "schema":     "string  // opcional — por defecto 'dbo'",
+  "name":       "string  // nombre del objeto"
+}
+```
+
+```json title="respuesta de ejemplo"
+{
+  "schema": "dbo",
+  "name": "usp_GetInvoiceById",
+  "type": "PROCEDURE",
+  "definition": "CREATE PROCEDURE dbo.usp_GetInvoiceById ..."
+}
+```
+
+## Notas de comportamiento
+
+- Todas las herramientas aplican `settings.queryTimeout` (por defecto 60s) y `settings.maxRows` (por defecto 10000).
+- El parámetro `connection` se valida contra el conjunto configurado. Un id desconocido retorna un error claro.
+- Los pools se crean perezosamente y se reutilizan entre llamadas. El servidor cierra los pools limpiamente en `SIGINT` / `SIGTERM`.

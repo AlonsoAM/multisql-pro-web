@@ -1,0 +1,46 @@
+OpenCode es una plataforma de desarrollo con agentes de IA que soporta MCP servers. Una vez registrado, puedes consultar todas tus conexiones SQL Server directamente desde el chat de OpenCode.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada.
+- OpenCode instalado y configurado.
+
+## 1. Abrir la configuración MCP de OpenCode
+
+En OpenCode, accede a la configuración de agentes o MCP servers. La ubicación exacta depende de tu versión de OpenCode — generalmente se encuentra en:
+
+- **Settings → Agents → MCP Servers**
+- O en el archivo de configuración de tu workspace: `.opencode/mcp.json`
+
+## 2. Agregar la entrada MCP
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+## 3. Reiniciar OpenCode
+
+Guarda la configuración y reinicia OpenCode para que cargue el nuevo servidor MCP.
+
+## 4. Verificar
+
+En un chat de OpenCode, pregunta:
+
+> *Usa multisql-pro para listar las conexiones configuradas.*
+
+Deberías ver a OpenCode invocar `list_connections` y mostrar el resultado.
+
+## Notas
+
+- La configuración de MCP en OpenCode puede variar según la versión. Consulta la documentación oficial de OpenCode si los pasos difieren.
+- El servidor MCP en sí es idéntico al de otros clientes. El mismo `config.json` alimenta Claude Code, Claude Desktop, Cursor, Windsurf, OpenCode y Codex.
+- Si OpenCode no puede encontrar `node`, usa la ruta absoluta al ejecutable.

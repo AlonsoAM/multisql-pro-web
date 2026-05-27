@@ -1,0 +1,79 @@
+The killer feature. Every connection has a `type` that decides what the agent can do on it. Read-only environments are enforced **before** the query ever reaches SQL Server — the engine never sees an unsafe statement.
+
+## The four types
+
+| type       | SELECT | INSERT / UPDATE / DELETE | DDL (CREATE / ALTER / DROP / ...) | EXEC   |
+| ---------- | ------ | ------------------------ | --------------------------------- | ------ |
+| `dev`      | yes    | yes                      | yes                               | yes    |
+| `qa`       | yes    | yes                      | yes                               | yes    |
+| `readonly` | yes    | **no**                   | **no**                            | **no** |
+| `prod`     | yes    | **no**                   | **no**                            | **no** |
+
+`dev` and `qa` are functionally identical — the labels exist to help humans distinguish environments in the dashboard and in the agent's responses.
+
+`readonly` and `prod` are also functionally identical. The difference is intent: label a production replica as `prod`. Label a reporting mirror or a shared analytical database as `readonly`.
+
+## How the parser works
+
+When `execute_sql` is called on a `readonly` or `prod` connection, the query passes through a guardian before being sent to the driver:
+
+1. **Strip comments.** Both `-- line` and `/* block */` comments are removed.
+2. **Split by statement.** The string is split on `;`, but only when the semicolon is **outside** `'...'`, `"..."` or `[...]` — that way a string literal containing `;` isn't cut in half.
+3. **Extract the first verb.** For each resulting statement, the first non-whitespace token is normalized to uppercase.
+4. **Match against the read whitelist.** If any statement's verb is not on the whitelist, the entire query is rejected with a clear error.
+
+The whitelist of verbs allowed on read-only connections:
+
+```text
+SELECT     WITH      DECLARE   SET       USE
+PRINT      IF        BEGIN     COMMIT    ROLLBACK
+```
+
+If any statement starts with anything else — `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `DROP`, `CREATE`, `ALTER`, `TRUNCATE`, `EXEC`, `EXECUTE`, ... — the query never leaves the server.
+
+## Why `EXEC` is blocked on readonly
+
+A stored procedure can do anything. The parser can't reason about what's inside `dbo.usp_DoStuff` without executing it. The conservative choice is to block all `EXEC` on read-only connections, period.
+
+If you need to run a stored procedure that you know to be `SELECT`-only safe in production, two options:
+
+- Refactor the SP into a view or table-valued function and call that instead.
+- Move the call to a non-production environment (a reporting replica labeled `readonly`) where the parser still applies, but you've separated the data layer.
+
+## Defense in depth
+
+The parser is the **first** line of defense, not the only one. We strongly recommend also creating a SQL user on the engine with the minimum permissions you need:
+
+```sql
+-- On the production server, with sysadmin:
+CREATE LOGIN multisql_ro WITH PASSWORD = 'a-secure-password';
+USE MyProdDatabase;
+CREATE USER multisql_ro FOR LOGIN multisql_ro;
+EXEC sp_addrolemember 'db_datareader', 'multisql_ro';
+```
+
+Then configure the `prod` connection in MultiSQL Pro to use `multisql_ro`. Now even if the parser had a bug, the engine would reject the write anyway.
+
+## Choosing a connection type
+
+A quick decision tree:
+
+- Is it a **personal sandbox** or a local SQL Server you don't share? → `dev`.
+- Is it a **shared QA / staging environment** your team writes to? → `qa`.
+- Is it a **reporting mirror** or **read-only replica** the agent should never write to, but not strictly production? → `readonly`.
+- Is it **the real production database**? → `prod`.
+
+The two read-only types behave the same — pick the name that matches your team's mental model.
+
+## What the agent sees on rejection
+
+When the parser blocks a query, the tool returns a structured error explaining what happened. Agents typically surface this to the user rather than retrying:
+
+```json
+{
+  "error": "BLOCKED_BY_PERMISSIONS",
+  "message": "Statement 'UPDATE' is not allowed on a 'prod' connection.",
+  "statement": "UPDATE Customers SET name = 'x' WHERE id = 1",
+  "allowed": ["SELECT", "WITH", "DECLARE", "SET", "USE", "PRINT", "IF", "BEGIN", "COMMIT", "ROLLBACK"]
+}
+```

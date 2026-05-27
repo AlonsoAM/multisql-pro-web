@@ -1,0 +1,62 @@
+Codex es el agente de coding basado en terminal de OpenAI. Soporta MCP servers nativamente, permitiéndote consultar tus bases de datos SQL Server directamente desde la terminal.
+
+## Prerrequisitos
+
+- MultiSQL Pro instalado y al menos una conexión configurada.
+- Codex CLI instalado. Verifica con `codex --version`.
+
+## Opción A — registrar vía CLI
+
+```bash
+codex mcp add multisql-pro -- node "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+```
+
+Notas:
+
+- La ruta **debe ser absoluta**.
+- Todo después de `--` es lo que Codex ejecutará para iniciar el MCP.
+- En macOS / Linux, elimina la letra de unidad: `node "/Users/tu/code/multisql-pro/src/server.js"`.
+
+Verifica:
+
+```bash
+codex mcp list
+# multisql-pro · stdio · node C:/.../multisql-pro/src/server.js
+```
+
+## Opción B — editar la configuración MCP manualmente
+
+Agrega una entrada bajo `mcpServers` en la configuración de Codex:
+
+```json
+{
+  "mcpServers": {
+    "multisql-pro": {
+      "command": "node",
+      "args": [
+        "C:/ruta/absoluta/a/multisql-pro/src/server.js"
+      ]
+    }
+  }
+}
+```
+
+Guarda y reinicia Codex.
+
+## Verificar la integración
+
+Abre una sesión de Codex y pregunta:
+
+> *Lista las conexiones disponibles en multisql-pro*
+
+Codex debería llamar a `list_connections` y retornar las conexiones configuradas.
+
+Prueba una consulta real:
+
+> *Muéstrame las columnas de la tabla Customers en cloud*
+
+## Notas
+
+- El mismo `config.json` alimenta Codex y otros clientes MCP.
+- Si Codex no puede encontrar `node`, usa la ruta absoluta al ejecutable.
+- Codex puede requerir que **habilites explícitamente** el MCP después de registrarlo.
