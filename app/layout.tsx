@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     },
   },
   manifest: '/manifest.webmanifest',
-  // verification: { google: 'PASTE-GOOGLE-SEARCH-CONSOLE-TOKEN-HERE' },
+  verification: { google: 'k0xqZnQnujEb3Zd6-royzkboSTkbRQrWjchPlIBi0xw' },
 };
 
 export const viewport: Viewport = {
