@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./app/favicon.svg" alt="MultiSQL Pro" width="72" height="72" />
+<img src="./app/icon.svg" alt="MultiSQL Pro" width="72" height="72" />
 
 # MultiSQL Pro · Website
 
