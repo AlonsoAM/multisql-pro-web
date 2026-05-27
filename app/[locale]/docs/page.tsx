@@ -5,6 +5,7 @@ import { getDocsNav } from '@/lib/docs-nav';
 import { ArrowRightIcon } from '@/components/Icons';
 import { translations, locales } from '@/lib/i18n';
 import type { Locale } from '@/lib/i18n';
+import { buildPageMetadata } from '@/lib/seo';
 
 export async function generateMetadata({
   params,
@@ -12,11 +13,14 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const t = translations[locale as Locale] ?? translations.es;
-  return {
+  const typed = (locales as readonly string[]).includes(locale) ? (locale as Locale) : 'es';
+  const t = translations[typed];
+  return buildPageMetadata({
+    locale: typed,
+    pathWithoutLocale: '/docs',
     title: t.docs.title,
     description: t.docs.description,
-  };
+  });
 }
 
 export function generateStaticParams() {

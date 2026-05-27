@@ -6,7 +6,7 @@ export const site = {
   name: 'MultiSQL Pro',
   tagline: t.site.tagline,
   description: t.site.description,
-  url: 'https://multisql-pro.dev',
+  url: 'https://multisql-pro.vercel.app',
   ogImage: '/og-image.png',
   author: {
     name: 'Alonso Anchante',
