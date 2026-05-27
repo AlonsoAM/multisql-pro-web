@@ -2,9 +2,16 @@ import { site } from './site';
 
 export async function getGitHubStars(): Promise<number | null> {
   try {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    }
     const res = await fetch(site.github.apiUrl, {
-      next: { revalidate: 3600 },
-      headers: { Accept: 'application/vnd.github+json' },
+      next: { revalidate: 300 },
+      headers,
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { stargazers_count?: number };
